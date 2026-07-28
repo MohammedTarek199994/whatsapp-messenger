@@ -1,0 +1,20 @@
+{
+  "name": "whatsapp-messenger-backend",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.4",
+    "@whiskeysockets/baileys": "^7.0.0-rc13",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0",
+    "helmet": "^8.0.0",
+    "pino": "^9.4.0",
+    "qrcode": "^1.5.4",
+    "socket.io": "^4.8.0"
+  }
+}
