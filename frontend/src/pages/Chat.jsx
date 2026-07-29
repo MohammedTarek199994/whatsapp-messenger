@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from 'react';
-import { io } from 'socket.io-client';
 import toast from 'react-hot-toast';
 import api from '../lib/api';
 
@@ -22,24 +21,6 @@ export default function Chat() {
   const messagesEnd = useRef(null);
 
   useEffect(() => {
-    const socket = io(window.location.origin, { transports: ['websocket', 'polling'] });
-
-    socket.on('qr', ({ qr }) => {
-      if (qr) setQr(qr);
-    });
-    socket.on('connection-status', ({ status, phone }) => {
-      setWaStatus(status);
-      if (status === 'connected') {
-        toast.success('تم الاتصال بالواتساب');
-        setQr(null);
-      }
-    });
-    socket.on('message-status', ({ messageId, status }) => {
-      setMessages((prev) =>
-        prev.map((m) => (m.id === messageId ? { ...m, status } : m))
-      );
-    });
-
     const pollStatus = setInterval(async () => {
       try {
         const { data } = await api.get('/whatsapp/status');
@@ -49,13 +30,29 @@ export default function Chat() {
       } catch {}
     }, 3000);
 
+    const pollMessages = setInterval(() => fetchMessages(), 5000);
+
     fetchInitialData();
 
     return () => {
-      socket.disconnect();
       clearInterval(pollStatus);
+      clearInterval(pollMessages);
     };
   }, []);
+
+  const fetchMessages = async () => {
+    try {
+      const { data } = await api.get('/messages?limit=100');
+      setMessages(data.messages);
+    } catch {}
+  };
+
+  const fetchStats = async () => {
+    try {
+      const { data } = await api.get('/messages/stats');
+      setStats(data);
+    } catch {}
+  };
 
   const fetchInitialData = async () => {
     try {
@@ -63,14 +60,8 @@ export default function Chat() {
       setWaStatus(data.status);
       if (data.qr) setQr(data.qr);
     } catch {}
-    try {
-      const { data } = await api.get('/messages?limit=100');
-      setMessages(data.messages);
-    } catch {}
-    try {
-      const { data } = await api.get('/messages/stats');
-      setStats(data);
-    } catch {}
+    await fetchMessages();
+    await fetchStats();
   };
 
   useEffect(() => {
