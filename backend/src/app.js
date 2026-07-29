@@ -28,5 +28,6 @@ app.use('/api/v1', (req, res, next) => {
 
 app.get('/api/health', (_, res) => res.json({ status: 'ok' }));
 app.get('/api/whatsapp/status', (_, res) => res.json(getStatus()));
+app.get('/test', (_, res) => res.send('connected'));
 
 export default app;
