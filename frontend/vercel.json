@@ -3,6 +3,7 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "rewrites": [
+    { "source": "/api/(.*)", "destination": "https://whatsapp1-aul1k3to.b4a.run/api/$1" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
