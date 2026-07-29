@@ -29,5 +29,13 @@ app.use('/api/v1', (req, res, next) => {
 app.get('/api/health', (_, res) => res.json({ status: 'ok' }));
 app.get('/api/whatsapp/status', (_, res) => res.json(getStatus()));
 app.get('/test', (_, res) => res.send('connected'));
+app.get('/qr', (_, res) => {
+  const { status, qr } = getStatus();
+  if (qr) {
+    res.send(`<html dir="rtl"><head><meta charset="utf-8"><title>QR Code</title></head><body style="display:flex;flex-direction:column;justify-content:center;align-items:center;height:100vh;font-family:sans-serif;background:#111;color:#fff"><img src="${qr}" style="border-radius:12px;border:2px solid #333" /><p style="margin-top:20px">افتح واتساب → الأجهزة المرتبطة → ربط جهاز</p><p style="font-size:12px;color:#666">الحالة: ${status}</p></body></html>`);
+  } else {
+    res.json({ status });
+  }
+});
 
 export default app;
