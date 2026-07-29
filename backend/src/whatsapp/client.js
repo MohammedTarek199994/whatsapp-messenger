@@ -1,7 +1,11 @@
-import makeWASocket, {
+import { HttpsProxyAgent } from 'https-proxy-agent';
+import { SocksProxyAgent } from 'socks-proxy-agent';
+import {
+  makeWASocket,
   DisconnectReason,
   useMultiFileAuthState,
-  delay
+  delay,
+  Browsers
 } from '@whiskeysockets/baileys';
 import pino from 'pino';
 import { Boom } from '@hapi/boom';
@@ -51,11 +55,19 @@ async function initWhatsApp() {
   console.log('Initializing WhatsApp connection...');
   const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
 
+  let agent = undefined;
+  if (process.env.PROXY) {
+    console.log('Using proxy:', process.env.PROXY);
+    agent = process.env.PROXY.startsWith('socks')
+      ? new SocksProxyAgent(process.env.PROXY)
+      : new HttpsProxyAgent(process.env.PROXY);
+  }
+
   sock = makeWASocket({
     auth: state,
     logger,
-    printQRInTerminal: true,
-    browser: ['Chrome', 'Windows', '20.0.04'],
+    agent,
+    browser: Browsers.macOS('Desktop'),
     syncFullHistory: false,
     markOnlineOnConnect: false
   });
@@ -78,12 +90,15 @@ async function initWhatsApp() {
     }
 
     if (lastDisconnect) {
-      const statusCode = new Boom(lastDisconnect.error)?.output?.statusCode;
-      console.log('Disconnect reason:', statusCode);
+      const error = lastDisconnect.error;
+      const statusCode = error ? new Boom(error)?.output?.statusCode : null;
+      console.log('Disconnect reason:', statusCode, error?.message || error);
     }
 
     if (connection === 'close') {
-      const statusCode = new Boom(lastDisconnect?.error)?.output?.statusCode;
+      const error = lastDisconnect?.error;
+      const statusCode = error ? new Boom(error)?.output?.statusCode : null;
+      console.log('Disconnect detail:', error?.message || error);
 
       if (statusCode === DisconnectReason.loggedOut || statusCode === DisconnectReason.badSession) {
         console.log('Session invalid, clearing...');
