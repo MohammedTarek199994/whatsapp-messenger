@@ -17,53 +17,44 @@ import { setupMessageEvents } from './events.js';
 import supabase from '../supabase.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const AUTH_DIR = path.join(__dirname, '../../auth_info');
-
-let sock = null;
-let currentQR = null;
-let connectionStatus = 'disconnected';
-let connectedPhone = null;
-let reconnectTimer = null;
-
+const BASE_AUTH_DIR = path.join(__dirname, '../../auth_info');
 const logger = pino({ level: 'warn' });
 
-function getIO() {
-  return global._io;
+const instances = new Map();
+
+function getAuthDir(userId) {
+  return path.join(BASE_AUTH_DIR, userId);
 }
 
-function broadcastStatus(status, extra = {}) {
-  getIO()?.emit('connection-status', { status, ...extra });
-}
-
-function cleanAuth() {
-  if (fs.existsSync(AUTH_DIR)) {
-    fs.rmSync(AUTH_DIR, { recursive: true, force: true });
-    fs.mkdirSync(AUTH_DIR, { recursive: true });
+function cleanAuth(userId) {
+  const dir = getAuthDir(userId);
+  if (fs.existsSync(dir)) {
+    fs.rmSync(dir, { recursive: true, force: true });
   }
 }
 
-async function initWhatsApp() {
-  if (reconnectTimer) {
-    clearTimeout(reconnectTimer);
-    reconnectTimer = null;
+async function initWhatsApp(userId) {
+  const existing = instances.get(userId);
+  if (existing?.reconnectTimer) {
+    clearTimeout(existing.reconnectTimer);
   }
 
-  if (!fs.existsSync(AUTH_DIR)) {
-    fs.mkdirSync(AUTH_DIR, { recursive: true });
+  const authDir = getAuthDir(userId);
+  if (!fs.existsSync(authDir)) {
+    fs.mkdirSync(authDir, { recursive: true });
   }
 
-  console.log('Initializing WhatsApp connection...');
-  const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
+  console.log(`[${userId}] Initializing WhatsApp connection...`);
+  const { state, saveCreds } = await useMultiFileAuthState(authDir);
 
   let agent = undefined;
   if (process.env.PROXY) {
-    console.log('Using proxy:', process.env.PROXY);
     agent = process.env.PROXY.startsWith('socks')
       ? new SocksProxyAgent(process.env.PROXY)
       : new HttpsProxyAgent(process.env.PROXY);
   }
 
-  sock = makeWASocket({
+  const sock = makeWASocket({
     auth: state,
     logger,
     agent,
@@ -72,75 +63,76 @@ async function initWhatsApp() {
     markOnlineOnConnect: false
   });
 
+  const stateObj = { sock, saveCreds, authDir, currentQR: null, connectionStatus: 'disconnected', connectedPhone: null, reconnectTimer: null };
+  instances.set(userId, stateObj);
+
   sock.ev.on('creds.update', saveCreds);
 
   sock.ev.on('connection.update', async (update) => {
+    const inst = instances.get(userId);
+    if (!inst) return;
+
     const { connection, lastDisconnect, qr } = update;
 
     if (qr) {
-      console.log('QR code received!');
+      console.log(`[${userId}] QR code received!`);
       try {
-        currentQR = await QRCode.toDataURL(qr, { width: 300 });
-        connectionStatus = 'qr-pending';
-        broadcastStatus('qr-pending');
-        getIO()?.emit('qr', { qr: currentQR });
+        inst.currentQR = await QRCode.toDataURL(qr, { width: 300 });
+        inst.connectionStatus = 'qr-pending';
       } catch (err) {
-        console.error('QR generation error:', err.message);
+        console.error(`[${userId}] QR generation error:`, err.message);
       }
     }
 
     if (lastDisconnect) {
       const error = lastDisconnect.error;
       const statusCode = error ? new Boom(error)?.output?.statusCode : null;
-      console.log('Disconnect reason:', statusCode, error?.message || error);
+      console.log(`[${userId}] Disconnect reason:`, statusCode, error?.message || error);
     }
 
     if (connection === 'close') {
       const error = lastDisconnect?.error;
       const statusCode = error ? new Boom(error)?.output?.statusCode : null;
-      console.log('Disconnect detail:', error?.message || error);
+      console.log(`[${userId}] Disconnect detail:`, error?.message || error);
 
       if (statusCode === DisconnectReason.loggedOut || statusCode === DisconnectReason.badSession) {
-        console.log('Session invalid, clearing...');
-        cleanAuth();
-        connectionStatus = 'disconnected';
-        currentQR = null;
-        connectedPhone = null;
-        broadcastStatus('disconnected');
-        reconnectTimer = setTimeout(() => initWhatsApp(), 3000);
+        console.log(`[${userId}] Session invalid, clearing...`);
+        cleanAuth(userId);
+        inst.connectionStatus = 'disconnected';
+        inst.currentQR = null;
+        inst.connectedPhone = null;
+        inst.reconnectTimer = setTimeout(() => initWhatsApp(userId), 3000);
       } else if (statusCode === DisconnectReason.connectionReplaced) {
-        console.log('Session replaced');
-        broadcastStatus('disconnected');
-        reconnectTimer = setTimeout(() => initWhatsApp(), 2000);
+        console.log(`[${userId}] Session replaced`);
+        inst.connectionStatus = 'disconnected';
+        inst.reconnectTimer = setTimeout(() => initWhatsApp(userId), 2000);
       } else {
-        console.log('Reconnecting in 5s...');
-        broadcastStatus('reconnecting');
-        reconnectTimer = setTimeout(() => initWhatsApp(), 5000);
+        console.log(`[${userId}] Reconnecting in 5s...`);
+        inst.connectionStatus = 'reconnecting';
+        inst.reconnectTimer = setTimeout(() => initWhatsApp(userId), 5000);
       }
     }
 
     if (connection === 'open') {
-      connectionStatus = 'connected';
-      currentQR = null;
-      connectedPhone = sock.user?.id?.replace(/:.*@/, '@').split('@')[0];
-      console.log('WhatsApp connected! Phone:', connectedPhone);
-      broadcastStatus('connected', { phone: connectedPhone });
-      getIO()?.emit('qr', { qr: null });
+      inst.connectionStatus = 'connected';
+      inst.currentQR = null;
+      inst.connectedPhone = sock.user?.id?.replace(/:.*@/, '@').split('@')[0];
+      console.log(`[${userId}] WhatsApp connected! Phone:`, inst.connectedPhone);
 
       try {
         await supabase.from('whatsapp_sessions').upsert({
-          user_id: 'default',
+          user_id: userId,
           is_connected: true,
-          phone_number: connectedPhone,
+          phone_number: inst.connectedPhone,
           last_connected: new Date().toISOString()
         }, { onConflict: 'user_id' });
       } catch (err) {
-        console.error('Session save error:', err.message);
+        console.error(`[${userId}] Session save error:`, err.message);
       }
     }
   });
 
-  setupMessageEvents(sock);
+  setupMessageEvents(sock, userId);
 }
 
 function normalizePhone(phone) {
@@ -150,14 +142,15 @@ function normalizePhone(phone) {
   return clean;
 }
 
-async function sendMessage(phone, content) {
-  if (!sock || connectionStatus !== 'connected') {
+async function sendMessage(userId, phone, content) {
+  const inst = instances.get(userId);
+  if (!inst || inst.connectionStatus !== 'connected') {
     throw new Error('WhatsApp not connected');
   }
 
   const cleanPhone = normalizePhone(phone);
   const jid = `${cleanPhone}@s.whatsapp.net`;
-  const result = await sock.sendMessage(jid, { text: content });
+  const result = await inst.sock.sendMessage(jid, { text: content });
 
   await delay(1000 + Math.random() * 2000);
 
@@ -167,19 +160,29 @@ async function sendMessage(phone, content) {
   };
 }
 
-async function logout() {
-  if (reconnectTimer) clearTimeout(reconnectTimer);
-  if (sock) {
-    await sock.logout();
-    sock = null;
-    connectionStatus = 'disconnected';
-    currentQR = null;
-    connectedPhone = null;
+async function logout(userId) {
+  const inst = instances.get(userId);
+  if (inst) {
+    if (inst.reconnectTimer) clearTimeout(inst.reconnectTimer);
+    if (inst.sock) {
+      await inst.sock.logout();
+    }
+    instances.delete(userId);
   }
 }
 
-function getStatus() {
-  return { status: connectionStatus, qr: currentQR, phone: connectedPhone };
+function getStatus(userId) {
+  const inst = instances.get(userId);
+  if (!inst) return { status: 'disconnected', qr: null, phone: null };
+  return { status: inst.connectionStatus, qr: inst.currentQR, phone: inst.connectedPhone };
 }
 
-export { initWhatsApp, sendMessage, logout, getStatus, getIO };
+function ensureInstance(userId) {
+  if (!instances.has(userId)) {
+    initWhatsApp(userId).catch(err => {
+      console.error(`[${userId}] WhatsApp init error:`, err.message);
+    });
+  }
+}
+
+export { initWhatsApp, sendMessage, logout, getStatus, ensureInstance };

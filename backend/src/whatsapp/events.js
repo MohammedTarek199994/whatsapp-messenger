@@ -1,5 +1,4 @@
 import supabase from '../supabase.js';
-import { getIO } from './client.js';
 
 const STATUS_MAP = {
   0: 'failed',
@@ -10,7 +9,7 @@ const STATUS_MAP = {
   5: 'read'
 };
 
-export function setupMessageEvents(sock) {
+export function setupMessageEvents(sock, userId) {
   sock.ev.on('messages.update', async (updates) => {
     for (const { key, update } of updates) {
       if (!update.status) continue;
@@ -25,20 +24,11 @@ export function setupMessageEvents(sock) {
       if (status === 'delivered') updateData.delivered_at = now;
       if (status === 'read') updateData.read_at = now;
 
-      const { data: message } = await supabase
+      await supabase
         .from('messages')
         .update(updateData)
         .eq('wa_message_id', waMessageId)
-        .select('id, user_id')
-        .single();
-
-      if (message) {
-        getIO()?.emit('message-status', {
-          messageId: message.id,
-          waMessageId,
-          status
-        });
-      }
+        .eq('user_id', userId);
     }
   });
 
@@ -53,7 +43,7 @@ export function setupMessageEvents(sock) {
         || msg.message?.extendedTextMessage?.text
         || '[media]';
 
-      console.log(`Incoming message from ${phone}: ${content}`);
+      console.log(`[${userId}] Incoming from ${phone}: ${content}`);
     }
   });
 }

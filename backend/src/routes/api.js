@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import crypto from 'crypto';
 import supabase from '../supabase.js';
-import { sendMessage, getStatus } from '../whatsapp/client.js';
+import { sendMessage, getStatus, ensureInstance } from '../whatsapp/client.js';
 
 const router = Router();
 
@@ -46,7 +46,8 @@ router.post('/send', apiKeyAuth, async (req, res) => {
     if (cleanPhone.startsWith('00')) cleanPhone = cleanPhone.substring(2);
     if (cleanPhone.startsWith('0') && cleanPhone.length >= 10) cleanPhone = cleanPhone.substring(1);
 
-    const result = await sendMessage(cleanPhone, message);
+    ensureInstance(req.userId);
+    const result = await sendMessage(req.userId, cleanPhone, message);
 
     res.json({
       success: true,
@@ -59,8 +60,9 @@ router.post('/send', apiKeyAuth, async (req, res) => {
 });
 
 // Public API - check status (needs X-API-Key)
-router.get('/status', apiKeyAuth, (_, res) => {
-  res.json(getStatus());
+router.get('/status', apiKeyAuth, async (req, res) => {
+  ensureInstance(req.userId);
+  res.json(getStatus(req.userId));
 });
 
 // Dashboard - list API keys (needs Supabase token)

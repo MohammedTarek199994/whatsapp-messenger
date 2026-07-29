@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import supabase from '../supabase.js';
-import { sendMessage, getStatus } from '../whatsapp/client.js';
+import { sendMessage, getStatus, ensureInstance } from '../whatsapp/client.js';
 
 const router = Router();
 
@@ -52,8 +52,9 @@ router.post('/send', async (req, res) => {
     }
 
     try {
-      console.log(`Sending message to ${cleanPhone}...`);
-      const result = await sendMessage(cleanPhone, content);
+      console.log(`[${req.user.id}] Sending message to ${cleanPhone}...`);
+      ensureInstance(req.user.id);
+      const result = await sendMessage(req.user.id, cleanPhone, content);
       console.log('Message sent! ID:', result.messageId);
 
       if (msgId) {
@@ -128,8 +129,9 @@ router.get('/stats', async (req, res) => {
   }
 });
 
-router.get('/whatsapp-status', (_, res) => {
-  res.json(getStatus());
+router.get('/whatsapp-status', (req, res) => {
+  ensureInstance(req.user.id);
+  res.json(getStatus(req.user.id));
 });
 
 export default router;
