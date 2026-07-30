@@ -92,6 +92,17 @@ export default function Chat() {
     }
   };
 
+  const handleDisconnect = async () => {
+    try {
+      await api.post('/whatsapp/disconnect');
+      setQr(null);
+      setWaStatus('disconnected');
+      toast.success('تم الفصل، انتظر QR جديد');
+    } catch {
+      toast.error('فشل الفصل');
+    }
+  };
+
   const statusColor = {
     disconnected: 'bg-red-500',
     'qr-pending': 'bg-yellow-500',
@@ -113,6 +124,11 @@ export default function Chat() {
           <div className="flex items-center gap-3">
             <div className={`w-3 h-3 rounded-full ${statusColor[waStatus]}`} />
             <span className="text-sm text-gray-300">{statusText[waStatus]}</span>
+            {waStatus === 'connected' && (
+              <button onClick={handleDisconnect} className="text-xs text-red-400 hover:text-red-300 mr-3">
+                فصل
+              </button>
+            )}
           </div>
           {stats && (
             <div className="flex gap-4 text-xs text-gray-400">
@@ -193,6 +209,9 @@ export default function Chat() {
             <div className="text-6xl mb-4">✅</div>
             <p className="text-wa-green font-bold">متصل بالواتساب</p>
             <p className="text-xs text-gray-400 mt-2">يمكنك الآن إرسال الرسائل</p>
+            <button onClick={handleDisconnect} className="mt-4 text-sm text-red-400 hover:text-red-300 underline">
+              فصل الجهاز
+            </button>
           </div>
         ) : qr ? (
           <div className="text-center">

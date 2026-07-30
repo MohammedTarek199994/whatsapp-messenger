@@ -7,7 +7,7 @@ import messageRoutes from './routes/messages.js';
 import contactRoutes from './routes/contacts.js';
 import apiRoutes from './routes/api.js';
 import supabase from './supabase.js';
-import { getStatus, ensureInstance } from './whatsapp/client.js';
+import { getStatus, ensureInstance, logout, cleanAuth } from './whatsapp/client.js';
 
 const app = express();
 
@@ -40,9 +40,18 @@ async function userAuth(req, res, next) {
   next();
 }
 
-app.get('/api/whatsapp/status', userAuth, (req, res) => {
-  ensureInstance(req.user.id);
-  res.json(getStatus(req.user.id));
+app.get('/api/whatsapp/status', (req, res) => {
+  const userId = req.query.user_id || 'default';
+  ensureInstance(userId);
+  res.json(getStatus(userId));
+});
+
+app.post('/api/whatsapp/disconnect', (req, res) => {
+  const userId = req.body.user_id || req.query.user_id || 'default';
+  logout(userId);
+  cleanAuth(userId);
+  ensureInstance(userId);
+  res.json({ success: true, message: 'Disconnected. New QR will be generated.' });
 });
 
 app.get('/qr', (req, res) => {

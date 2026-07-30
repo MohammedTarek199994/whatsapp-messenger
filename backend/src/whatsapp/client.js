@@ -185,4 +185,4 @@ function ensureInstance(userId) {
   }
 }
 
-export { initWhatsApp, sendMessage, logout, getStatus, ensureInstance };
+export { initWhatsApp, sendMessage, logout, getStatus, ensureInstance, cleanAuth };
