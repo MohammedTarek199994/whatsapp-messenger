@@ -23,7 +23,7 @@ export default function Chat() {
   useEffect(() => {
     const pollStatus = setInterval(async () => {
       try {
-        const { data } = await api.get('/whatsapp/status');
+        const { data } = await api.get('/messages/whatsapp-status');
         setWaStatus(data.status);
         if (data.qr) setQr(data.qr);
         if (data.status === 'connected') setQr(null);
@@ -56,7 +56,7 @@ export default function Chat() {
 
   const fetchInitialData = async () => {
     try {
-      const { data } = await api.get('/whatsapp/status');
+      const { data } = await api.get('/messages/whatsapp-status');
       setWaStatus(data.status);
       if (data.qr) setQr(data.qr);
     } catch {}
@@ -94,7 +94,7 @@ export default function Chat() {
 
   const handleDisconnect = async () => {
     try {
-      await api.post('/whatsapp/disconnect');
+      await api.post('/messages/disconnect');
       setQr(null);
       setWaStatus('disconnected');
       toast.success('تم الفصل، انتظر QR جديد');
@@ -107,6 +107,7 @@ export default function Chat() {
     disconnected: 'bg-red-500',
     'qr-pending': 'bg-yellow-500',
     reconnecting: 'bg-yellow-500',
+    'duplicate-phone': 'bg-red-500',
     connected: 'bg-wa-green'
   };
 
@@ -114,6 +115,7 @@ export default function Chat() {
     disconnected: 'غير متصل',
     'qr-pending': 'امسح الكود',
     reconnecting: 'إعادة اتصال...',
+    'duplicate-phone': 'الرقم مستخدم من حساب آخر',
     connected: 'متصل'
   };
 

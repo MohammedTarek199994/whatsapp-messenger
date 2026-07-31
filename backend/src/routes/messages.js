@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import supabase from '../supabase.js';
-import { sendMessage, getStatus, ensureInstance } from '../whatsapp/client.js';
+import { sendMessage, getStatus, ensureInstance, logout, cleanAuth } from '../whatsapp/client.js';
 
 const router = Router();
 
@@ -132,6 +132,17 @@ router.get('/stats', async (req, res) => {
 router.get('/whatsapp-status', (req, res) => {
   ensureInstance(req.user.id);
   res.json(getStatus(req.user.id));
+});
+
+router.post('/disconnect', async (req, res) => {
+  try {
+    await logout(req.user.id);
+    cleanAuth(req.user.id);
+    ensureInstance(req.user.id);
+    res.json({ success: true, message: 'Disconnected. New QR will be generated.' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 export default router;

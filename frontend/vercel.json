@@ -3,7 +3,7 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "https://6f26-154-180-75-114.ngrok-free.app/api/$1" },
+    { "source": "/api/(.*)", "destination": "https://a8b1-156-192-241-247.ngrok-free.app/api/$1" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

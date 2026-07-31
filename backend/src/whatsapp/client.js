@@ -114,9 +114,21 @@ async function initWhatsApp(userId) {
     }
 
     if (connection === 'open') {
+      inst.connectedPhone = sock.user?.id?.replace(/:.*@/, '@').split('@')[0];
+
+      const otherOwner = await getPhoneOwner(userId, inst.connectedPhone);
+      if (otherOwner) {
+        console.warn(`[${userId}] Phone ${inst.connectedPhone} is already linked to user ${otherOwner}. Logging out this session to avoid disconnecting the other user. Scan QR with a DIFFERENT number.`);
+        inst.connectionStatus = 'duplicate-phone';
+        inst.currentQR = null;
+        inst.connectedPhone = null;
+        if (inst.sock) await inst.sock.logout().catch(() => {});
+        cleanAuth(userId);
+        return;
+      }
+
       inst.connectionStatus = 'connected';
       inst.currentQR = null;
-      inst.connectedPhone = sock.user?.id?.replace(/:.*@/, '@').split('@')[0];
       console.log(`[${userId}] WhatsApp connected! Phone:`, inst.connectedPhone);
 
       try {
@@ -183,6 +195,15 @@ function ensureInstance(userId) {
       console.error(`[${userId}] WhatsApp init error:`, err.message);
     });
   }
+}
+
+function getPhoneOwner(userId, phone) {
+  for (const [otherId, inst] of instances) {
+    if (otherId !== userId && inst.connectedPhone === phone && inst.connectionStatus === 'connected') {
+      return otherId;
+    }
+  }
+  return null;
 }
 
 export { initWhatsApp, sendMessage, logout, getStatus, ensureInstance, cleanAuth };
